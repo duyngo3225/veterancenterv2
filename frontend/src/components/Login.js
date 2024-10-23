@@ -1,6 +1,7 @@
 // src/components/Login.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import './login.css';
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -31,6 +32,7 @@ function Login() {
 
   return (
     <div className="login-container">
+      <img src="https://i.imgur.com/SROEj2Q.jpeg" alt="Logo" className="logo" />
       <h2>Login</h2>
       {error && <p className="error">{error}</p>}
       <form onSubmit={handleLogin}>
@@ -48,7 +50,7 @@ function Login() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <button type="submit">Login</button>
+        <button type="submit" className="login-button">Submit</button>
       </form>
     </div>
   );
