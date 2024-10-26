@@ -41,12 +41,29 @@ html, body {
     line-height: normal; /* Allow line-height to be normal for better wrapping */
     overflow: hidden; /* Hide any overflow */
 }
+
 /* Special styling for the Scan button */
 .box-scan {
     background-color: #007bff; /* Blue background for Scan button */
     padding: 12px 20px; /* Ensure same padding as in .box */
     height: 55px; /* Ensure same height */
     font-size: 22px; /* Ensure font size is consistent */
+}
+
+/* Logout button styling */
+.logout-button {
+    background-color: #dc3545; /* Red background for Logout button */
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 22px;
+    min-width: 120px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 55px;
+    transition: background-color 0.3s ease;
 }
 
 /* Hover effects for buttons */
@@ -56,6 +73,10 @@ html, body {
 
 .box-scan:hover {
     background-color: #0056b3; /* Darker blue on hover for Scan button */
+}
+
+.logout-button:hover {
+    background-color: #c82333; /* Darker red on hover for Logout button */
 }
 
 /* Modal styles */

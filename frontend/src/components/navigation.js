@@ -1,9 +1,25 @@
-import React, { useState } from 'react';
+// src/components/Navigation.js
+import React, { useState, useEffect } from 'react';
 import './navigation.css';
+import { useNavigate } from 'react-router-dom';
 
 const Navigation = () => {
     const [modal, setModal] = useState('');
     const [pdfs, setPdfs] = useState([]);
+    const navigate = useNavigate();
+
+    // Check for token on mount
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/'); // Redirect to login if not authenticated
+        }
+    }, [navigate]);
+
+    const handleLogout = () => {
+        localStorage.removeItem('token'); // Clear the token
+        navigate('/'); // Redirect to login page
+    };
 
     const openModal = (modalName) => {
         setModal(modalName);
@@ -49,6 +65,7 @@ const Navigation = () => {
                 <div onClick={() => openModal('dd214')} className="box">DD214</div>
                 <div onClick={() => openModal('tar')} className="box">TAR</div>
                 <div onClick={() => openModal('awardLetter')} className="box">Award Letter</div>
+                <div onClick={handleLogout} className="logout-button">Logout</div> {/* Logout button */}
             </div>
             {modal && (
                 <div className="modal" onClick={closeModal}>

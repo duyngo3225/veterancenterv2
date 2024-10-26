@@ -8,7 +8,7 @@ const fileRoutes = require('./routes/fileRoutes');
 const dataRoutes = require('./routes/dataRoutes');
 const authRoutes = require('./routes/authRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
-const chokidar = require('chokidar');
+const chokidar = require('chokidar');     //Drag pdf into uploads when server is running
 const { processPdfFile } = require('./utils/processPdfFile');
 
 const app = express();

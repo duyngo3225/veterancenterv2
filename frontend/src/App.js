@@ -22,9 +22,11 @@ function App() {
                 <SecurePage />
               </>
             ) : (
-              <Navigate to="/" />
+              <Navigate to="/" replace />
             )}
           />
+          {/* Redirect any unknown paths to the login page */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>
