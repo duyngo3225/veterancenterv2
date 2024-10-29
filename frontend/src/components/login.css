@@ -57,3 +57,8 @@ input:focus {
     color: red;
     margin-bottom: 10px; /* Add spacing below the error message */
 }
+.success {
+    color: green;
+    font-weight: bold;
+    margin-top: 10px;
+}

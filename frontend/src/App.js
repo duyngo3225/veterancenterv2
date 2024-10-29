@@ -1,36 +1,43 @@
 // src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './components/AuthContext'; // Import useAuth here
 import Login from './components/Login';
 import SecurePage from './components/checklist';
 import Navigation from './components/navigation';
 import './App.css';
 
-const isAuthenticated = () => !!localStorage.getItem('token');
-
-function App() {
+const App = () => {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route
-            path="/secure"
-            element={isAuthenticated() ? (
-              <>
-                <Navigation /> {/* Render Navigation here */}
-                <SecurePage />
-              </>
-            ) : (
-              <Navigate to="/" replace />
-            )}
-          />
-          {/* Redirect any unknown paths to the login page */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route 
+              path="/secure" 
+              element={
+                <ProtectedRoute>
+                  <Navigation /> {/* Render Navigation here */}
+                  <SecurePage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
-}
+};
+
+// ProtectedRoute component to handle authentication check
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  console.log('Is authenticated:', isAuthenticated); // Debug log
+
+  return isAuthenticated ? children : <Navigate to="/" replace />;
+};
+
 
 export default App;

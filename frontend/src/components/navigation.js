@@ -8,16 +8,18 @@ const Navigation = () => {
     const [pdfs, setPdfs] = useState([]);
     const navigate = useNavigate();
 
-    // Check for token on mount
+    // Check for token or msalAccount on mount
     useEffect(() => {
         const token = localStorage.getItem('token');
-        if (!token) {
+        const msalAccount = localStorage.getItem('msalAccount');
+        if (!token && !msalAccount) {
             navigate('/'); // Redirect to login if not authenticated
         }
     }, [navigate]);
 
     const handleLogout = () => {
         localStorage.removeItem('token'); // Clear the token
+        localStorage.removeItem('msalAccount'); // Clear the MSAL account
         navigate('/'); // Redirect to login page
     };
 
@@ -30,16 +32,14 @@ const Navigation = () => {
 
     const closeModal = () => {
         setModal('');
-        setPdfs([]);
+        setPdfs([]); // Clear PDFs when closing modal
     };
 
     const fetchPdfs = async () => {
         try {
             const response = await fetch('http://localhost:3000/api/pdfs');
             const data = await response.json();
-            if (data.length > 0) {
-                setPdfs(data);
-            }
+            setPdfs(data.length > 0 ? data : []); // Set PDFs or empty array
         } catch (error) {
             console.error('Error fetching PDFs:', error);
         }
@@ -58,15 +58,17 @@ const Navigation = () => {
     return (
         <div className="navbar">
             <div className="container">
-                <div onClick={() => { }} className="box box-scan">Scan</div>
-                <div onClick={() => openModal('coe')} className="box">COE</div>
-                <div onClick={() => openModal('enrollment')} className="box">Enrollment MG</div>
-                <div onClick={() => openModal('schedule')} className="box">Schedule</div>
-                <div onClick={() => openModal('dd214')} className="box">DD214</div>
-                <div onClick={() => openModal('tar')} className="box">TAR</div>
-                <div onClick={() => openModal('awardLetter')} className="box">Award Letter</div>
-                <div onClick={handleLogout} className="logout-button">Logout</div> {/* Logout button */}
+                <div className="box box-scan" onClick={() => openModal('scan')}>Scan</div>
+                <div className="box" onClick={() => openModal('coe')}>COE</div>
+                <div className="box" onClick={() => openModal('enrollment')}>Enrollment MG</div>
+                <div className="box" onClick={() => openModal('schedule')}>Schedule</div>
+                <div className="box" onClick={() => openModal('dd214')}>DD214</div>
+                <div className="box" onClick={() => openModal('tar')}>TAR</div>
+                <div className="box" onClick={() => openModal('awardLetter')}>Award Letter</div>
+                <div className="logout-button" onClick={handleLogout}>Logout</div> {/* Logout button */}
             </div>
+
+            {/* Modal for displaying instructions and PDFs */}
             {modal && (
                 <div className="modal" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
