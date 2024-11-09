@@ -24,7 +24,7 @@
   width: 75px;
   cursor: pointer;
   transition: background-color 0.3s ease;
-  font-size: 14px;
+  font-size: 18px;
   text-decoration: none;
 }
 
@@ -39,7 +39,6 @@
   padding: 15px;
 }
 
-/* Modal styles */
 .modal {
   display: flex;
   justify-content: center;
@@ -71,7 +70,6 @@
   height: 600px;
 }
 
-/* Table styling */
 table {
   width: 100%;
   border-collapse: collapse;

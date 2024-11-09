@@ -1,5 +1,5 @@
 // src/components/Login.js
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { msalInstance, loginRequest } from './msalInstance';
 import { useAuth } from './AuthContext';
@@ -12,14 +12,7 @@ function Login() {
     const [success, setSuccess] = useState('');
     const navigate = useNavigate();
     const { login } = useAuth();
-    const [isLoggingIn, setIsLoggingIn] = useState(false); // New state for tracking login status
-
-    useEffect(() => {
-        const initializeMsal = async () => {
-            await msalInstance.initialize();
-        };
-        initializeMsal();
-    }, []);
+    const [isLoggingIn, setIsLoggingIn] = useState(false); 
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -53,13 +46,12 @@ function Login() {
     
         try {
             const response = await msalInstance.loginPopup(loginRequest);
-            console.log('Login response:', response); // Log the response
-    
             if (response && response.account) {
                 localStorage.setItem('msalAccount', response.account.username);
-                login(); // Update authentication state in context
+                console.log('Bearer Access Token:', response.accessToken);
+                login();
                 setSuccess('Microsoft login successful!');
-                navigate('/secure'); // Redirect after successful login
+                navigate('/secure'); 
             }
         } catch (error) {
             console.error('Microsoft login failed:', error);
