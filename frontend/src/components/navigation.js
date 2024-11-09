@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import './navigation.css';
 import { useNavigate } from 'react-router-dom';
 import { fetchPdfsFromFolder, getFileDownloadUrl } from './graphService'; // Import graph service
+import { useAuth } from './AuthContext';
 
 const Navigation = () => {
+    const { isAuthenticated, logout } = useAuth();
     const [modal, setModal] = useState('');
     const [pdfUrl, setPdfUrl] = useState(''); // State for PDF URL
     const [loading, setLoading] = useState(false); // For loading state
@@ -15,12 +17,17 @@ const Navigation = () => {
         if (!token && !msalAccount) {
             navigate('/');
         }
-    }, [navigate]);
+    }, [navigate, isAuthenticated]);
+
+     //const handleLogout = async () => {
+        //localStorage.removeItem('token'); 
+        //localStorage.removeItem('msalAccount'); 
+        //localStorage.removeItem('excelData');
+        //navigate('/'); 
+    //};
 
     const handleLogout = async () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('msalAccount');
-        localStorage.removeItem('excelData');
+        await logout();
         navigate('/');
     };
 
