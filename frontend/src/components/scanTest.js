@@ -25,6 +25,7 @@ import {
 import { driveId, studentTrackersFolderId } from './config';
 import * as XLSX from 'xlsx';
 
+
 const requiredDocsMapping = {
     'Chapter 30': ['COE', 'Enrollment Manager', 'Schedule'],
     'Chapter 31': ['Enrollment Manager', 'Schedule'],
@@ -47,6 +48,7 @@ const DocumentStatus = ({ isPresent }) => (
 );
 
 const Testing = () => {
+    const [showTable, setShowTable] = useState(false);
     const [children, setChildren] = useState([]);
     const [fileCabinetContents, setFileCabinetContents] = useState([]);
     const [studentRecordsContents, setStudentRecordsContents] = useState([]);
@@ -154,24 +156,29 @@ const Testing = () => {
 
     const validateNamingConventions = (studentName, subFolders) => {
         console.log(`Starting validation for ${studentName}...`, { subFolders });
-        let coeValid = false;
-        let emValid = false;
-        let schedValid = false;
-        let specialDocValid = false;
-
+    
+        let validDocs = {
+            dd214Valid: false,
+            tarValid: false,
+            awardLetterValid: false,
+            coeValid: false,
+            emValid: false,
+            schedValid: false,
+        };
+    
         try {
             const studentId = studentName.split(' ').pop();
             const rawBenefit = studentBenefitsMap[studentId] || '';
             const benefit = cleanBenefit(rawBenefit);
-            
+    
             console.log(`Validating student ${studentName} with ID ${studentId} and cleaned benefit ${benefit}`);
-
+    
             const requiredDocs = requiredDocsMapping[benefit] || [];
             console.log(`Required documents for ${benefit}:`, requiredDocs);
-
+    
             const [lastName, firstNameWithId] = studentName.split(', ');
             const firstName = firstNameWithId.split(' ')[0];
-
+    
             const mostRecentFolder = subFolders
                 .filter(folder => /^\d+/.test(folder.name))
                 .reduce((prev, current) => {
@@ -179,91 +186,92 @@ const Testing = () => {
                     const currNum = parseInt(current.name.split(' ')[0], 10) || 0;
                     return currNum > prevNum ? current : prev;
                 }, subFolders.find(folder => /^\d+/.test(folder.name)));
-
+    
             subFolders.forEach((folder) => {
                 const contents = subFolderContentMap[folder.id] || [];
-
+    
                 if (folder.name === "00") {
+                    // Validating documents based on the benefit type
                     if (benefit === 'Missouri Returning Heroes') {
                         const constructedFileNameDD214 = `${lastName}, ${firstName} DD214.pdf`;
-                        specialDocValid = contents.some(file => 
+                        validDocs.dd214Valid = contents.some(file =>
                             file.name.toLowerCase() === constructedFileNameDD214.toLowerCase()
                         );
-                        coeValid = specialDocValid;
                     } else if (benefit === 'Fed TA') {
                         const constructedFileNameTAR = `${lastName}, ${firstName} TAR.pdf`;
-                        specialDocValid = contents.some(file => 
+                        validDocs.tarValid = contents.some(file =>
                             file.name.toLowerCase() === constructedFileNameTAR.toLowerCase()
                         );
-                        coeValid = specialDocValid;
                     } else if (benefit === 'State TA') {
                         const constructedFileNameAwardLetter = `${lastName}, ${firstName} Award Letter.pdf`;
-                        specialDocValid = contents.some(file => 
+                        validDocs.awardLetterValid = contents.some(file =>
                             file.name.toLowerCase() === constructedFileNameAwardLetter.toLowerCase()
                         );
-                        coeValid = specialDocValid;
                     } else if (['Chapter 30', 'Chapter 33 Post 9/11', 'Chapter 35', 'Chapter 1606'].includes(benefit)) {
                         const constructedFileNameCOE = `${lastName}, ${firstName} COE.pdf`;
-                        coeValid = contents.some(file => 
+                        validDocs.coeValid = contents.some(file =>
                             file.name.toLowerCase() === constructedFileNameCOE.toLowerCase()
                         );
                     }
                 }
-
+    
+                // Check the most recent folder for EM and Schedule files
                 if (mostRecentFolder && folder.id === mostRecentFolder.id) {
                     const termCode = mostRecentFolder.name.split(' ')[1];
                     const constructedFileNameEM = `${termCode} ${lastName}, ${firstName} EM.pdf`;
                     const constructedFileNameSched = `${termCode} ${lastName}, ${firstName} Sched.pdf`;
-
-                    emValid = contents.some(file => 
+    
+                    validDocs.emValid = contents.some(file =>
                         file.name.toLowerCase() === constructedFileNameEM.toLowerCase()
                     );
-                    schedValid = contents.some(file => 
+                    validDocs.schedValid = contents.some(file =>
                         file.name.toLowerCase() === constructedFileNameSched.toLowerCase()
                     );
                 }
             });
-
-            setValidationResultsMap(prev => ({
-                ...prev,
-                [studentName]: { 
-                    coeValid, 
-                    emValid, 
-                    schedValid,
-                    benefit
-                }
-            }));
-            console.log(`Validation results for ${studentName}:`, { 
-                benefit,
-                coeValid, 
-                emValid, 
-                schedValid 
-            });
-
+    
+            // Save results for each document type separately in validationResultsMap
+            validationResultsMap[studentName] = validDocs;
+    
         } catch (error) {
-            console.error(`Error validating naming conventions for ${studentName}:`, error);
+            console.error(`Error during validation for ${studentName}:`, error);
         }
     };
+    
+    
 
     const handleScan = async () => {
+        console.log("Scan button clicked!");
         if (isDataLoaded && Object.keys(studentFoldersMap).length > 0) {
             Object.entries(studentFoldersMap).forEach(([studentName, subFolders]) => {
                 validateNamingConventions(studentName, subFolders);
             });
             setHasScanned(true);
+            setShowTable(true); // Show the table after scanning
         }
     };
+    
 
     const getDocumentStatus = (studentName, docType) => {
-        if (!hasScanned || !validationResultsMap[studentName]) return false;
-        
+        console.log("hasScanned:", hasScanned); // Check if it is true
+        if (!hasScanned || !validationResultsMap[studentName]) {
+            console.log("No scan results found for", studentName); // Debugging
+            console.log("Available students in validationResultsMap:", Object.keys(validationResultsMap)); // Check keys
+            return false;
+        }
+    
+    
         const results = validationResultsMap[studentName];
+    
         switch (docType) {
             case 'COE':
-            case 'DD214':
-            case 'TAR':
-            case 'Award Letter':
                 return results.coeValid;
+            case 'DD214':
+                return results.dd214Valid;
+            case 'TAR':
+                return results.tarValid;
+            case 'Award Letter':
+                return results.awardLetterValid;
             case 'Enrollment Manager':
                 return results.emValid;
             case 'Schedule':
@@ -272,6 +280,7 @@ const Testing = () => {
                 return false;
         }
     };
+    
 
     useEffect(() => {
         const loadFolderContents = async () => {
@@ -332,47 +341,51 @@ const Testing = () => {
                     </Button>
                 </div>
                 
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Student ID</TableCell>
-                                <TableCell>Benefit</TableCell>
-                                <TableCell>Required Documents</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {excelData.map((student) => {
-                                const benefit = studentBenefitsMap[student.studentId] || '';
-                                const requiredDocs = requiredDocsMapping[benefit] || [];
-                                
-                                return (
-                                    <TableRow key={student.studentId}>
-                                        <TableCell>{student.name}</TableCell>
-                                        <TableCell>{student.studentId}</TableCell>
-                                        <TableCell>{benefit}</TableCell>
-                                        <TableCell>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {requiredDocs.map((doc) => (
-                                                    <div key={doc} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <DocumentStatus 
-                                                            isPresent={getDocumentStatus(student.name, doc)} 
-                                                        />
-                                                        <span>{doc}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                {/* Conditionally render the table */}
+                {showTable && (
+                    <TableContainer component={Paper}>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Student ID</TableCell>
+                                    <TableCell>Benefit</TableCell>
+                                    <TableCell>Required Documents</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {excelData.map((student) => {
+                                    const benefit = studentBenefitsMap[student.studentId] || '';
+                                    const requiredDocs = requiredDocsMapping[benefit] || [];
+                                    
+                                    return (
+                                        <TableRow key={student.studentId}>
+                                            <TableCell>{student.name}</TableCell>
+                                            <TableCell>{student.studentId}</TableCell>
+                                            <TableCell>{benefit}</TableCell>
+                                            <TableCell>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {requiredDocs.map((doc) => (
+                                                        <div key={doc} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <DocumentStatus 
+                                                                isPresent={getDocumentStatus(student.name, doc)} 
+                                                            />
+                                                            <span>{doc}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
             </CardContent>
         </Card>
     );
+    
 };
 
 export default Testing;
