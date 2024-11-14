@@ -1,20 +1,12 @@
 // src/components/graphService.js 
-import { msalInstance, loginRequest } from './msalInstance';
+//import { msalInstance, loginRequest } from './msalInstance';
+import AuthService from './AuthService';
 import { driveId } from './config'; 
 
 export const graphApiFetch = async (url, method = 'GET', body = null) => {
     try {
-        const account = msalInstance.getAllAccounts()[0];
-        if (!account) throw new Error('No active account! Please log in.');
-
-        const response = await msalInstance.acquireTokenSilent({
-            ...loginRequest,
-            account: account,
-        });
-
-        const accessToken = response.accessToken;
-        if (!accessToken) throw new Error('Access token could not be acquired. Please log in.');
-
+        const accessToken = await AuthService.getAccessToken();
+        
         const headers = new Headers();
         headers.append('Authorization', `Bearer ${accessToken}`);
         headers.append('Content-Type', 'application/json');
@@ -33,7 +25,7 @@ export const graphApiFetch = async (url, method = 'GET', body = null) => {
         return await graphResponse.json();
     } catch (error) {
         console.error('Error in graphApiFetch:', error);
-        throw new Error('Could not fetch data from Graph API. Please try again.');
+        throw error;
     }
 };
 
@@ -91,9 +83,6 @@ export const fetchSubFolderContents = async (driveId, subFolderId) => {
     return fetchChildren(driveId, subFolderId); // Fetch contents of a subfolder
 };
 
-export const fetchChildren = async (driveId, itemId) => {
-    return graphApiFetch(`/drives/${driveId}/items/${itemId}/children`);
-};
 
 // Fetch PDF files from a specific SharePoint folder
 export const fetchPdfsFromFolder = async (siteId, driveId, folderId) => {
@@ -119,6 +108,11 @@ export const getFileDownloadUrl = async (driveId, fileId) => {
     }
 };
 
+
+
+export const fetchChildren = async (driveId, itemId) => {
+    return graphApiFetch(`/drives/${driveId}/items/${itemId}/children`);
+};
 export const getExcelFileDownloadUrl = async (driveId, folderId) => {
     const response = await fetchChildren(driveId, folderId);
     const fileItem = response.value.find(file => file.name === "RFC Dummy v2.xlsx");

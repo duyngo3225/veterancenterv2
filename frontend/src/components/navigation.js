@@ -1,8 +1,9 @@
+// src/components/Navigation.js
 import React, { useState, useEffect } from 'react';
 import './navigation.css';
 import { useNavigate } from 'react-router-dom';
-import { fetchPdfsFromFolder, getFileDownloadUrl } from './graphService'; // Import graph service
 import { useAuth } from './AuthContext';
+import { fetchPdfsFromFolder, getFileDownloadUrl } from './graphService';
 
 const Navigation = () => {
     const { isAuthenticated, logout } = useAuth();
@@ -15,16 +16,9 @@ const Navigation = () => {
         const token = localStorage.getItem('token');
         const msalAccount = localStorage.getItem('msalAccount');
         if (!token && !msalAccount) {
-            navigate('/');
+            navigate('/'); 
         }
     }, [navigate, isAuthenticated]);
-
-     //const handleLogout = async () => {
-        //localStorage.removeItem('token'); 
-        //localStorage.removeItem('msalAccount'); 
-        //localStorage.removeItem('excelData');
-        //navigate('/'); 
-    //};
 
     const handleLogout = async () => {
         await logout();

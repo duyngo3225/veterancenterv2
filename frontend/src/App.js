@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+// src/App.js
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext'; 
-import { msalInstance } from './components/msalInstance';
+//import { msalInstance } from './components/msalInstance';
+import AuthService from './components/AuthService';
 import Login from './components/Login';
 import SecurePage from './components/checklist';
 import Navigation from './components/navigation';
@@ -10,18 +12,24 @@ import ScanTest from './components/scanTest';
 import Testing from './components/testing';
 
 const App = () => {
-  const [hasScanned, setHasScanned] = useState(false); // Track if scan has been triggered
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    const initializeMsal = async () => {
-      await msalInstance.initialize();
+    const initializeAuth = async () => {
+      try {
+        await AuthService.initialize();
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+      }
     };
-    initializeMsal();
+
+    initializeAuth();
   }, []);
 
-  const handleScanClick = () => {
-    setHasScanned(true); // Trigger the scan when the button is clicked
-  };
+  if (!isInitialized) {
+    return <div>Initializing...</div>;
+  }
 
   return (
     <AuthProvider>
@@ -35,8 +43,7 @@ const App = () => {
                 <ProtectedRoute>
                   <Navigation /> 
                   <SecurePage />
-                  <button onClick={handleScanClick}>Scan Documents</button> {/* Button to trigger scan */}
-                  {hasScanned && <ScanTest />} {/* Render ScanTest only after scan */}
+                  <ScanTest />
                   <Testing />
                 </ProtectedRoute>
               } 
@@ -53,5 +60,6 @@ const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? children : <Navigate to="/" replace />;
 };
+
 
 export default App;
