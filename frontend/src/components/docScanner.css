@@ -78,6 +78,10 @@ body {
     background-color: #e0f0e0;
 }
 
+.data-table tr:hover:not(.completed-row) {
+    background-color: #f1f1f1;
+}
+
 .red-header {
     background-color: red; 
     color: white; 
@@ -292,9 +296,10 @@ body {
 }
 
 .completed-row {
-    background-color: #f0f8f0;
+    background-color: #e8f5e9 !important; /* Light green background */
+    transition: background-color 0.3s ease;
 }
 
 .completed-row:hover {
-    background-color: #e0f0e0;
+    background-color: #c8e6c9 !important; /* Slightly darker green on hover */
 }

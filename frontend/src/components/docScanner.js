@@ -437,9 +437,13 @@ const MergedDocumentTracker = () => {
                             {filteredData.map((veteran, index) => {
                                 const benefit = studentBenefitsMap[veteran.studentId] || '';
                                 const requiredDocs = requiredDocsMapping[benefit] || [];
+                                const isComplete = hasAllRequiredDocuments(veteran);
     
                                 return (
-                                    <tr key={index}>
+                                    <tr 
+                                        key={index}
+                                        className={isComplete ? 'completed-row' : ''}
+                                    >
                                         <td>{veteran.name}</td>
                                         <td>{veteran.studentId}</td>
                                         <td>
@@ -464,13 +468,13 @@ const MergedDocumentTracker = () => {
                                         </td>
                                         <td>
                                             <div className="document-container">
-                                            <div className="checkbox-column">
-                                            {requiredDocs.map((doc, docIndex) => (
+                                                <div className="checkbox-column">
+                                                    {requiredDocs.map((doc, docIndex) => (
                                                         <input
-                                                        key={docIndex}
-                                                        type="checkbox"
-                                                        checked={checkedDocuments[`${veteran.studentId}-${doc}`] || getDocumentStatus(veteran.studentId, doc)}
-                                                        onChange={() => handleCheckboxChange(`${veteran.studentId}-${doc}`, veteran.studentId)}
+                                                            key={docIndex}
+                                                            type="checkbox"
+                                                            checked={checkedDocuments[`${veteran.studentId}-${doc}`] || getDocumentStatus(veteran.studentId, doc)}
+                                                            onChange={() => handleCheckboxChange(`${veteran.studentId}-${doc}`, veteran.studentId)}
                                                         />
                                                     ))}
                                                     <input
@@ -478,28 +482,28 @@ const MergedDocumentTracker = () => {
                                                         checked={!!dateChecked[veteran.studentId]}
                                                         onChange={() => handleDateToggle(veteran.studentId)}
                                                     />
-                                                    </div>
-                                                    <div className="documents-column">
-                                                        {requiredDocs.map((doc, docIndex) => {
+                                                </div>
+                                                <div className="documents-column">
+                                                    {requiredDocs.map((doc, docIndex) => {
                                                         const isValid = getDocumentStatus(veteran.studentId, doc);
                                                         const isChecked = checkedDocuments[`${veteran.studentId}-${doc}`] || isValid;
                 
                                                         return (
                                                             <div key={docIndex} className={`document-box ${isChecked ? 'checked' : ''}`}>
-                                                            <span>{doc}</span>
-                                                            <div className="status-icons">
-                                                            {isValid ? (
-                                                            <Check className="status-icon valid" />
-                                                            ) : (
-                                                            <X className="status-icon invalid" />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                );
-                                                })}
+                                                                <span>{doc}</span>
+                                                                <div className="status-icons">
+                                                                    {isValid ? (
+                                                                        <Check className="status-icon valid" />
+                                                                    ) : (
+                                                                        <X className="status-icon invalid" />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                     <div className="document-box">
                                                         <span className="date-text">
-                                                        <span>Date</span>
+                                                            <span>Date</span>
                                                             {dateChecked[veteran.studentId] && 
                                                                 new Date(dateChecked[veteran.studentId]).toLocaleDateString('en-US', {
                                                                     month: 'numeric',
@@ -524,7 +528,6 @@ const MergedDocumentTracker = () => {
             </div>
         </div>
     );
-
 };
 
 export default MergedDocumentTracker;
