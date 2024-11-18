@@ -74,6 +74,10 @@ body {
     background-color: #f1f1f1;
 }
 
+.data-table tr.completed-row:hover {
+    background-color: #e0f0e0;
+}
+
 .red-header {
     background-color: red; 
     color: white; 
@@ -285,4 +289,12 @@ body {
 
 .clear-button:hover {
     background-color: #c82333; 
+}
+
+.completed-row {
+    background-color: #f0f8f0;
+}
+
+.completed-row:hover {
+    background-color: #e0f0e0;
 }

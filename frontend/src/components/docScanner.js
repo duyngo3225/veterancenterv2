@@ -75,6 +75,16 @@ const MergedDocumentTracker = () => {
         }
     }, []);
 
+    const hasAllRequiredDocuments = (veteran) => {
+        const benefit = studentBenefitsMap[veteran.studentId] || '';
+        const requiredDocs = requiredDocsMapping[benefit] || [];
+        
+        return requiredDocs.every(doc => 
+            checkedDocuments[`${veteran.studentId}-${doc}`] || 
+            getDocumentStatus(veteran.studentId, doc)
+        );
+    };
+
 
     const cleanBenefit = (benefit) => {
         if (!benefit) return '';
@@ -295,19 +305,33 @@ const MergedDocumentTracker = () => {
     };
 
     const filterData = (data, searchTerm) => {
-        return data.filter(item => {
-          const fullName = item.name || 'Unknown';
-          const [lastName, firstName] = fullName.split(',').map(name => name.trim());
-          const studentId = item.studentId ? item.studentId.toString() : '';
-    
-          const searchTermLower = searchTerm.toLowerCase();
-          return (
-            firstName.toLowerCase().includes(searchTermLower) ||
-            lastName.toLowerCase().includes(searchTermLower) ||
-            studentId.includes(searchTermLower)
-          );
+        const filtered = data.filter(item => {
+            const fullName = item.name || 'Unknown';
+            const [lastName, firstName] = fullName.split(',').map(name => name.trim());
+            const studentId = item.studentId ? item.studentId.toString() : '';
+
+            const searchTermLower = searchTerm.toLowerCase();
+            return (
+                firstName.toLowerCase().includes(searchTermLower) ||
+                lastName.toLowerCase().includes(searchTermLower) ||
+                studentId.includes(searchTermLower)
+            );
         });
-      };
+
+        // Sort the filtered data based on document completion
+        return filtered.sort((a, b) => {
+            const aComplete = hasAllRequiredDocuments(a);
+            const bComplete = hasAllRequiredDocuments(b);
+            
+            if (aComplete === bComplete) {
+                // If both have the same completion status, sort by name
+                return a.name.localeCompare(b.name);
+            }
+            
+            // Sort incomplete records first (false before true)
+            return aComplete ? 1 : -1;
+        });
+    };
     
       const filteredData = filterData(data, searchTerm);
 
