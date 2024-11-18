@@ -408,7 +408,9 @@ const MergedDocumentTracker = () => {
                 <div className="header-controls">
                     <div></div>
                     <div>
-                        <Search searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                        {hasScanned && (
+                            <Search searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                        )}
                     </div>
                     <div className="scan-button-container">
                         <button 
@@ -416,14 +418,21 @@ const MergedDocumentTracker = () => {
                             onClick={handleScan}
                             disabled={!isDataLoaded}
                         >
-                            Scan Documents
+                            {!hasScanned ? 'Scan Documents' : 'Rescan Documents'}
                         </button>
                     </div>
                 </div>
                 
                 {error && <div className="error-message">{error}</div>}
+
+                {!hasScanned && isDataLoaded && (
+                    <div className="initial-message">
+                        <h2>Welcome to the Document Tracker</h2>
+                        <p>Click "Scan Documents" to begin reviewing student documentation.</p>
+                    </div>
+                )}
     
-                {filteredData.length > 0 ? (
+                {hasScanned && filteredData.length > 0 ? (
                     <table className="data-table">
                         <thead>
                             <tr>
@@ -520,7 +529,7 @@ const MergedDocumentTracker = () => {
                             })}
                         </tbody>
                     </table>
-                ) : (
+                ) : hasScanned && (
                     <div>
                         {searchTerm ? 'No matching results found' : 'No data available'}
                     </div>

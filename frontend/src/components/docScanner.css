@@ -200,11 +200,12 @@ body {
     padding: 8px 16px;
     cursor: pointer;
     font-size: 24px;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
 }
 
 .scan-button:hover {
-    background-color: #0b7dda;
+    background-color: #1976D2;
+    transform: translateY(-1px);
 }
 
 .scan-button:disabled {
@@ -302,4 +303,24 @@ body {
 
 .completed-row:hover {
     background-color: #c8e6c9 !important; /* Slightly darker green on hover */
+}
+
+.initial-message {
+    text-align: center;
+    padding: 40px;
+    margin: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.initial-message h2 {
+    color: #343a40;
+    margin-bottom: 16px;
+    font-size: 24px;
+}
+
+.initial-message p {
+    color: #6c757d;
+    font-size: 18px;
 }
