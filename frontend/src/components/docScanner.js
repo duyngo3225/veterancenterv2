@@ -283,6 +283,21 @@ const MergedDocumentTracker = () => {
             Object.entries(studentFoldersMap).forEach(([studentName, subFolders]) => {
                 validateNamingConventions(studentName, subFolders);
             });
+            const updatedCheckedDocs = { ...checkedDocuments };
+            data.forEach(student => {
+                const studentId = student.studentId;
+                const benefit = studentBenefitsMap[studentId] || '';
+                const requiredDocs = requiredDocsMapping[benefit] || [];
+                requiredDocs.forEach(docType => {
+                    const docKey = `${studentId}-${docType}`;
+                    const isValidFromScan = getDocumentStatus(studentId, docType);
+                    if (!isValidFromScan && updatedCheckedDocs[docKey]) {
+                        delete updatedCheckedDocs[docKey];
+                    }
+                });
+            });
+            setCheckedDocuments(updatedCheckedDocs);
+            localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
             setHasScanned(true);
         }
     };
@@ -385,21 +400,21 @@ const MergedDocumentTracker = () => {
     };
 
     // This effect will run after scanning to uncheck manually checked boxes that shouldn't be checked
-    useEffect(() => {
-        if (hasScanned) {
-            const updatedCheckedDocs = { ...checkedDocuments };
-            Object.entries(validationResultsMap).forEach(([studentId, results]) => {
-                Object.entries(results).forEach(([docType, isValid]) => {
-                    const docKey = `${studentId}-${docType}`;
-                    if (!isValid && updatedCheckedDocs[docKey]) {
-                        delete updatedCheckedDocs[docKey];
-                    }
-                });
-            });
-            setCheckedDocuments(updatedCheckedDocs);
-            localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
-        }
-    }, [hasScanned, validationResultsMap]);
+    //useEffect(() => {
+       // if (hasScanned) {
+         //   const updatedCheckedDocs = { ...checkedDocuments };
+          //  Object.entries(validationResultsMap).forEach(([studentId, results]) => {
+          //      Object.entries(results).forEach(([docType, isValid]) => {
+           //         const docKey = `${studentId}-${docType}`;
+          //          if (!isValid && updatedCheckedDocs[docKey]) {
+                      //  delete updatedCheckedDocs[docKey];
+           //         }
+          //      });
+         //   });
+         //   setCheckedDocuments(updatedCheckedDocs);
+         //   localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
+      //  }
+   // }, [hasScanned, validationResultsMap]);
 
     return (
         <div className="secure-page">
