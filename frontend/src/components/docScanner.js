@@ -1,61 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { Check, X } from 'lucide-react';
+// src/components/docScanner.js
+import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import * as XLSX from 'xlsx';
 import { 
-    fetchDigitalFilingCabinetId, 
-    fetchChildren, 
-    fetchFileCabinetId, 
-    fetchStudentRecordsId, 
-    fetchCurrentStudentsId,
-    fetchSubFolderContents,
-    getExcelFileDownloadUrl 
+    fetchDigitalFilingCabinetId, fetchChildren, fetchFileCabinetId, fetchStudentRecordsId, 
+    fetchCurrentStudentsId,getExcelFileDownloadUrl, createStudentFoldersInBatches, fetchAllChildren
 } from './graphService';
 import { driveId, studentTrackersFolderId } from './config';
-import * as XLSX from 'xlsx';
+import Search from './search';
+import DataTable from './dataTable';
 import './docScanner.css';
 
-
-const Search = ({ searchTerm, setSearchTerm }) => {
-    return (
-        <div className="search-container">
-            <input
-                type="text"
-                className="search-input"
-                placeholder="Search for veteran..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <button 
-                className="clear-button"
-                onClick={() => setSearchTerm('')}
-            >
-                x
-            </button>
-        </div>
-    );
-};
-
-const requiredDocsMapping = {
-    'Chapter 30': ['COE', 'Enrollment Manager', 'Schedule'],
-    'Chapter 31': ['Enrollment Manager', 'Schedule'],
-    'Chapter 33 Post 9/11': ['COE', 'Enrollment Manager', 'Schedule'],
-    'Chapter 35': ['COE', 'Enrollment Manager', 'Schedule'],
-    'Fed TA': ['TAR', 'Enrollment Manager', 'Schedule'],
-    'State TA': ['Award Letter', 'Enrollment Manager', 'Schedule'],
-    'Missouri Returning Heroes': ['DD214', 'Enrollment Manager', 'Schedule'],
-    'Chapter 1606': ['COE', 'Enrollment Manager', 'Schedule'],
-};
-
-const MergedDocumentTracker = () => {
+const MergedDocumentTracker = forwardRef(({ setIsLoading }, ref) => {
     const [dateChecked, setDateChecked] = useState(() => {
         const stored = localStorage.getItem('dateChecked');
         return stored ? JSON.parse(stored) : {};
     });
+    const [showCompleted, setShowCompleted] = useState(false);
+    const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(false);
     const [data, setData] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState(null);
     const [checkedDocuments, setCheckedDocuments] = useState({});
     const [editingBenefits, setEditingBenefits] = useState({});
-    const [isEditing, setIsEditing] = useState({});
     const [loading, setLoading] = useState(false);
     const [fileCabinetContents, setFileCabinetContents] = useState([]);
     const [studentRecordsContents, setStudentRecordsContents] = useState([]);
@@ -66,25 +32,26 @@ const MergedDocumentTracker = () => {
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [hasScanned, setHasScanned] = useState(false);
     const [studentBenefitsMap, setStudentBenefitsMap] = useState({});
+    const [missingFolders, setMissingFolders] = useState([]);
+    const [isCreatingFolders, setIsCreatingFolders] = useState(false);
 
-    // Initialize checked documents state from localStorage
+    const requiredDocsMapping = {
+        'Chapter 30': ['COE', 'Enrollment Manager', 'Schedule'],
+        'Chapter 31': ['Enrollment Manager', 'Schedule'],
+        'Chapter 33 Post 9/11': ['COE', 'Enrollment Manager', 'Schedule'],
+        'Chapter 35': ['COE', 'Enrollment Manager', 'Schedule'],
+        'Fed TA': ['TAR', 'Enrollment Manager', 'Schedule'],
+        'State TA': ['Award Letter', 'Enrollment Manager', 'Schedule'],
+        'Missouri Returning Heroes': ['DD214', 'Enrollment Manager', 'Schedule'],
+        'Chapter 1606': ['COE', 'Enrollment Manager', 'Schedule'],
+    };
+
     useEffect(() => {
         const storedCheckedDocs = localStorage.getItem('checkedDocuments');
         if (storedCheckedDocs) {
             setCheckedDocuments(JSON.parse(storedCheckedDocs));
         }
     }, []);
-
-    const hasAllRequiredDocuments = (veteran) => {
-        const benefit = studentBenefitsMap[veteran.studentId] || '';
-        const requiredDocs = requiredDocsMapping[benefit] || [];
-        
-        return requiredDocs.every(doc => 
-            checkedDocuments[`${veteran.studentId}-${doc}`] || 
-            getDocumentStatus(veteran.studentId, doc)
-        );
-    };
-
 
     const cleanBenefit = (benefit) => {
         if (!benefit) return '';
@@ -99,9 +66,14 @@ const MergedDocumentTracker = () => {
         return benefit;
     };
 
-    // Excel File Loading
-    useEffect(() => {
-        const getExcelFile = async () => {
+    const isStudentComplete = (studentId, benefit) => {
+        const requiredDocs = requiredDocsMapping[benefit] || [];
+        return requiredDocs.every(doc => {
+            const scanStatus = getDocumentStatus(studentId, doc);
+            return scanStatus;
+        });
+    };
+        const fetchExcelData = async () => {
             try {
                 const downloadUrl = await getExcelFileDownloadUrl(driveId, studentTrackersFolderId);
                 const response = await fetch(downloadUrl);
@@ -111,14 +83,14 @@ const MergedDocumentTracker = () => {
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
+    
                 const rows = json.slice(1);
                 const excelData = rows.map(row => ({
                     name: row[10],
                     studentId: row[13],
                     benefit: row[23],
                 })).filter(item => item.name);
-
+    
                 setData(excelData);
                 
                 const benefitsMap = {};
@@ -131,30 +103,23 @@ const MergedDocumentTracker = () => {
                 setError('Failed to fetch Excel file');
             }
         };
-
-        if (data.length === 0) {
-            getExcelFile();
-        }
-    }, [data.length]);
-
-    // Load folder contents
-    useEffect(() => {
+    
         const loadFolderContents = async () => {
             setLoading(true);
             try {
                 const folderId = await fetchDigitalFilingCabinetId();
                 const fileCabinetId = await fetchFileCabinetId(driveId, folderId);
-                const fileCabinetChildren = await fetchChildren(driveId, fileCabinetId);
-                setFileCabinetContents(fileCabinetChildren.value);
-
+                const fileCabinetContents = await fetchChildren(driveId, fileCabinetId);
+                setFileCabinetContents(fileCabinetContents.value);
+        
                 const studentRecordsId = await fetchStudentRecordsId(driveId, fileCabinetId);
                 const studentRecordsChildren = await fetchChildren(driveId, studentRecordsId);
                 setStudentRecordsContents(studentRecordsChildren.value);
-
+        
                 const currentStudentsId = await fetchCurrentStudentsId(driveId, studentRecordsId);
                 const currentStudentsChildren = await fetchChildren(driveId, currentStudentsId);
                 setCurrentStudentsContents(currentStudentsChildren.value);
-
+        
                 await loadAllStudentFolders(currentStudentsId, currentStudentsChildren.value);
                 
                 setIsDataLoaded(true);
@@ -164,43 +129,130 @@ const MergedDocumentTracker = () => {
                 setLoading(false);
             }
         };
-
-        loadFolderContents();
-    }, []);
-
-    const loadSubFolderContents = async (subFolderId) => {
-        try {
-            const subFolderContent = await fetchSubFolderContents(driveId, subFolderId);
-            setSubFolderContentMap(prev => ({
-                ...prev,
-                [subFolderId]: subFolderContent.value
-            }));
-            return subFolderContent.value;
-        } catch (error) {
-            return [];
-        }
-    };
-
-    const loadAllStudentFolders = async (currentStudentsId, students) => {
-        const newStudentFoldersMap = {};
-        
-        const loadFoldersPromises = students.map(async (student) => {
+    
+        const handleRefresh = async () => {
+            setLoading(true);
+            setError(null);
+            
             try {
-                const studentFolderContents = await fetchSubFolderContents(driveId, student.id);
-                newStudentFoldersMap[student.name] = studentFolderContents.value;
+                const previousValidationResultsMap = { ...validationResultsMap };
+                const previousCheckedDocuments = { ...checkedDocuments };
     
-                const subfolderPromises = studentFolderContents.value.map(subfolder => 
-                    loadSubFolderContents(subfolder.id)
-                );
-                await Promise.all(subfolderPromises);
+                await Promise.all([
+                    fetchExcelData(),
+                    loadFolderContents()
+                ]);
+                setValidationResultsMap(previousValidationResultsMap);
+                setCheckedDocuments(previousCheckedDocuments);
+                setHasScanned(hasScanned);
             } catch (error) {
-                console.error(`Error processing student folder ${student.name}:`, error);
+                setError('Failed to refresh data. Please try again.');
+            } finally {
+                setLoading(false);
             }
-        });
+        };
     
-        await Promise.all(loadFoldersPromises);
-        setStudentFoldersMap(newStudentFoldersMap);
-    };
+        useEffect(() => {
+            if (data.length === 0) {
+                fetchExcelData();
+            }
+        }, [data.length]);
+    
+        useEffect(() => {
+            loadFolderContents();
+        }, []);
+
+        const loadSubFolderContents = async (subFolderId) => {
+            try {
+                const subFolderContent = await fetchChildren(driveId, subFolderId);
+                setSubFolderContentMap(prev => ({
+                    ...prev,
+                    [subFolderId]: subFolderContent.value
+                }));
+                return subFolderContent.value;
+            } catch (error) {
+                console.error(`Error loading subfolder contents for ${subFolderId}:`, error);
+                return [];
+            }
+        };
+
+        const loadAllStudentFolders = async (currentStudentsId, students) => {
+            const newStudentFoldersMap = {};
+            const processedFolders = new Set();
+            const CHUNK_SIZE = 50;
+            const CONCURRENT_CHUNKS = 3;
+            const DELAY_BETWEEN_CHUNKS = 300;
+            
+            try {
+                const allStudentFolders = await fetchAllChildren(driveId, currentStudentsId);
+                for (let startIndex = 0; startIndex < allStudentFolders.value.length; startIndex += CHUNK_SIZE * CONCURRENT_CHUNKS) {
+                    const chunkPromises = [];
+                    for (let i = 0; i < CONCURRENT_CHUNKS; i++) {
+                        const chunkStartIndex = startIndex + (i * CHUNK_SIZE);
+                        if (chunkStartIndex >= allStudentFolders.value.length) break;
+                        
+                        const folderChunk = allStudentFolders.value.slice(
+                            chunkStartIndex,
+                            Math.min(chunkStartIndex + CHUNK_SIZE, allStudentFolders.value.length)
+                        );
+                        chunkPromises.push(processChunk(folderChunk));
+                    }
+                    await Promise.all(chunkPromises);
+                    if (startIndex + CHUNK_SIZE * CONCURRENT_CHUNKS < allStudentFolders.value.length) {
+                        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_CHUNKS));
+                    }
+                }
+                setStudentFoldersMap(newStudentFoldersMap);
+                const missingStudents = data.filter(student => {
+                    const studentFolderName = `${student.name} ${student.studentId}`;
+                    return !processedFolders.has(studentFolderName);
+                });
+                setMissingFolders(missingStudents);
+            } catch (error) {
+                console.error('Error in loadAllStudentFolders:', error);
+                setError('Failed to load student folders. Please try again.');
+                throw error;
+            }
+            
+            async function processChunk(folderChunk) {
+                return Promise.all(folderChunk.map(async (student) => {
+                    try {
+                        if (processedFolders.has(student.name)) return;
+                        
+                        // Fetch student folder contents and immediately process subfolders
+                        const [studentFolderContents] = await Promise.all([
+                            fetchChildren(driveId, student.id)
+                        ]);
+                        
+                        newStudentFoldersMap[student.name] = studentFolderContents.value;
+                        processedFolders.add(student.name);
+        
+                        // Load subfolders in parallel with controlled concurrency
+                        const subfolders = studentFolderContents.value;
+                        for (let i = 0; i < subfolders.length; i += CONCURRENT_CHUNKS) {
+                            const subfolderBatch = subfolders.slice(i, i + CONCURRENT_CHUNKS);
+                            const subfolderResults = await Promise.all(
+                                subfolderBatch.map(async subfolder => {
+                                    const contents = await loadSubFolderContents(subfolder.id);
+                                    return { id: subfolder.id, contents };
+                                })
+                            );
+                            
+                            // Update subFolderContentMap with batch results
+                            subfolderResults.forEach(({ id, contents }) => {
+                                setSubFolderContentMap(prev => ({
+                                    ...prev,
+                                    [id]: contents
+                                }));
+                            });
+                        }
+                    } catch (error) {
+                        console.error(`Error processing student folder ${student.name}:`, error);
+                    }
+                }));
+            }
+        };
+        
 
     const validateNamingConventions = (studentName, subFolders) => {
         const validDocs = {
@@ -213,24 +265,33 @@ const MergedDocumentTracker = () => {
         };
     
         try {
+
+    
             const folderStudentId = studentName.split(' ').pop();
             const benefit = studentBenefitsMap[folderStudentId] || '';
             
             const [lastName, firstNameWithId] = studentName.split(', ');
-            const firstName = firstNameWithId.split(' ')[0];
+            const firstName = firstNameWithId?.split(' ')?.[0];
     
+            if (!lastName || !firstName) {
+                console.error(`Invalid name format for student: ${studentName}`);
+                return validDocs;
+            }
+    
+            // Find the most recent folder with better error handling
             const mostRecentFolder = subFolders
                 .filter(folder => /^\d+/.test(folder.name))
-                .reduce((prev, current) => {
-                    const prevNum = parseInt(prev?.name.split(' ')[0], 10) || 0;
-                    const currNum = parseInt(current?.name.split(' ')[0], 10) || 0;
-                    return currNum > prevNum ? current : prev;
-                }, subFolders.find(folder => /^\d+/.test(folder.name)));
-    
+                .sort((a, b) => {
+                    const aNum = parseInt(a.name.split(' ')[0], 10) || 0;
+                    const bNum = parseInt(b.name.split(' ')[0], 10) || 0;
+                    return bNum - aNum;
+                })[0];
+ 
             subFolders.forEach((folder) => {
                 const contents = subFolderContentMap[folder.id] || [];
     
                 if (folder.name === "00") {
+                    // Check base documents
                     if (benefit === 'Missouri Returning Heroes') {
                         const constructedFileNameDD214 = `${lastName}, ${firstName} DD214.pdf`;
                         validDocs.dd214Valid = contents.some(file =>
@@ -251,6 +312,7 @@ const MergedDocumentTracker = () => {
                         validDocs.coeValid = contents.some(file =>
                             file.name.toLowerCase() === constructedFileNameCOE.toLowerCase()
                         );
+
                     }
                 }
     
@@ -265,6 +327,7 @@ const MergedDocumentTracker = () => {
                     validDocs.schedValid = contents.some(file =>
                         file.name.toLowerCase() === constructedFileNameSched.toLowerCase()
                     );
+
                 }
             });
     
@@ -272,18 +335,89 @@ const MergedDocumentTracker = () => {
                 ...prev,
                 [folderStudentId]: validDocs
             }));
+
             
         } catch (error) {
             console.error(`Validation error for ${studentName}:`, error);
         }
     };
 
+    const checkMissingFolders = () => {
+        const processedFolders = new Set(Object.keys(studentFoldersMap));
+        
+        const missingStudents = data.filter(student => {
+            const expectedFolderName = `${student.name} ${student.studentId}`;
+            return !processedFolders.has(expectedFolderName);
+        });
+
+        setMissingFolders(missingStudents);
+    };
+
+    const handleCreateMissingFolders = async () => {
+        try {
+            setIsCreatingFolders(true);
+            setIsLoading(true);
+            setError(null);
+    
+            // Get the Current Students folder ID
+            const folderId = await fetchDigitalFilingCabinetId();
+            const fileCabinetId = await fetchFileCabinetId(driveId, folderId);
+            const studentRecordsId = await fetchStudentRecordsId(driveId, fileCabinetId);
+            const currentStudentsId = await fetchCurrentStudentsId(driveId, studentRecordsId);
+    
+            // Create folders in batches
+            const { results, errors } = await createStudentFoldersInBatches(
+                driveId, 
+                currentStudentsId, 
+                missingFolders
+            );
+    
+            // If there were any errors, show them to the user
+            if (errors.length > 0) {
+                setError(`Created ${results.length} folders. Failed to create ${errors.length} folders. Check console for details.`);
+                console.error('Folder creation errors:', errors);
+            } else {
+                setError(null);
+            }
+    
+            // Refresh folder contents after creating
+            await loadFolderContents();
+            
+            // Update missing folders list
+            const successfullyCreated = new Set(
+                results.map(result => `${result.name}`)
+            );
+            
+            setMissingFolders(prevMissing => 
+                prevMissing.filter(student => 
+                    !successfullyCreated.has(`${student.name} ${student.studentId}`)
+                )
+            );
+    
+        } catch (error) {
+            console.error('Error creating missing folders:', error);
+            setError('Failed to create missing folders. Please try again.');
+        } finally {
+            setIsCreatingFolders(false);
+            setIsLoading(false);
+        }
+    };
+
     const handleScan = async () => {
         if (isDataLoaded && Object.keys(studentFoldersMap).length > 0) {
+            // Clear previous validation results
+            setValidationResultsMap({});
+            
+            // Perform new scan validation
             Object.entries(studentFoldersMap).forEach(([studentName, subFolders]) => {
                 validateNamingConventions(studentName, subFolders);
             });
-            const updatedCheckedDocs = { ...checkedDocuments };
+    
+            checkMissingFolders();
+    
+            // Clear all manual checks and set new checked status based on scan results only
+            const newCheckedDocs = {};
+            
             data.forEach(student => {
                 const studentId = student.studentId;
                 const benefit = studentBenefitsMap[studentId] || '';
@@ -291,17 +425,19 @@ const MergedDocumentTracker = () => {
                 requiredDocs.forEach(docType => {
                     const docKey = `${studentId}-${docType}`;
                     const isValidFromScan = getDocumentStatus(studentId, docType);
-                    if (!isValidFromScan && updatedCheckedDocs[docKey]) {
-                        delete updatedCheckedDocs[docKey];
+                    if (isValidFromScan) {
+                        newCheckedDocs[docKey] = true;
                     }
                 });
             });
-            setCheckedDocuments(updatedCheckedDocs);
-            localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
+
+            setCheckedDocuments(newCheckedDocs);
+            localStorage.setItem('checkedDocuments', JSON.stringify(newCheckedDocs));
             setHasScanned(true);
         }
     };
 
+    // Modified getDocumentStatus to only use scan results
     const getDocumentStatus = (studentId, docType) => {
         if (!hasScanned || !validationResultsMap[studentId]) {
             return false;
@@ -320,35 +456,40 @@ const MergedDocumentTracker = () => {
     };
 
     const filterData = (data, searchTerm) => {
-        const filtered = data.filter(item => {
+        return data.filter(item => {
             const fullName = item.name || 'Unknown';
-            const [lastName, firstName] = fullName.split(',').map(name => name.trim());
             const studentId = item.studentId ? item.studentId.toString() : '';
-
-            const searchTermLower = searchTerm.toLowerCase();
-            return (
-                firstName.toLowerCase().includes(searchTermLower) ||
-                lastName.toLowerCase().includes(searchTermLower) ||
-                studentId.includes(searchTermLower)
-            );
-        });
-
-        // Sort the filtered data based on document completion
-        return filtered.sort((a, b) => {
-            const aComplete = hasAllRequiredDocuments(a);
-            const bComplete = hasAllRequiredDocuments(b);
+            const benefit = studentBenefitsMap[studentId] || '';
             
-            if (aComplete === bComplete) {
-                // If both have the same completion status, sort by name
-                return a.name.localeCompare(b.name);
+            // Name search logic remains the same
+            let lastName = '';
+            let firstName = fullName;
+            if (fullName.includes(',')) {
+                try {
+                    [lastName, firstName] = fullName.split(',').map(name => name.trim());
+                } catch (error) {
+                    firstName = fullName;
+                    lastName = '';
+                }
             }
+            const fullNameFirstLast = `${firstName} ${lastName}`.trim();
             
-            // Sort incomplete records first (false before true)
-            return aComplete ? 1 : -1;
+            const matchesSearch = 
+                fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (firstName && firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (lastName && lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                fullNameFirstLast.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                studentId.includes(searchTerm.toLowerCase());
+            
+            // Use scan-based completion status
+            const isComplete = isStudentComplete(studentId, benefit);
+            
+            return matchesSearch && (showCompleted ? isComplete : !isComplete);
         });
     };
-    
-      const filteredData = filterData(data, searchTerm);
+
+    const filteredData = filterData(data, searchTerm);
+
 
 
       useEffect(() => {
@@ -360,13 +501,11 @@ const MergedDocumentTracker = () => {
         if (storedDates) {
             setDateChecked(JSON.parse(storedDates));
         }
-
-        // Clean up expired dates
         const now = new Date();
         const updatedDates = { ...JSON.parse(storedDates || '{}') };
         Object.entries(updatedDates).forEach(([id, dateStr]) => {
             const date = new Date(dateStr);
-            if ((now - date) > (2 * 24 * 60 * 60 * 1000)) { // 2 days in milliseconds
+            if ((now - date) > (2 * 24 * 60 * 60 * 1000)) {
                 delete updatedDates[id];
             }
         });
@@ -376,10 +515,9 @@ const MergedDocumentTracker = () => {
 
     const handleCheckboxChange = (docId, studentId) => {
         setCheckedDocuments(prev => {
-            const newChecked = !prev[docId];
             const updatedCheckedDocs = {
                 ...prev,
-                [docId]: newChecked,
+                [docId]: !prev[docId]
             };
             localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
             return updatedCheckedDocs;
@@ -399,159 +537,175 @@ const MergedDocumentTracker = () => {
         });
     };
 
-    // This effect will run after scanning to uncheck manually checked boxes that shouldn't be checked
-    //useEffect(() => {
-       // if (hasScanned) {
-         //   const updatedCheckedDocs = { ...checkedDocuments };
-          //  Object.entries(validationResultsMap).forEach(([studentId, results]) => {
-          //      Object.entries(results).forEach(([docType, isValid]) => {
-           //         const docKey = `${studentId}-${docType}`;
-          //          if (!isValid && updatedCheckedDocs[docKey]) {
-                      //  delete updatedCheckedDocs[docKey];
-           //         }
-          //      });
-         //   });
-         //   setCheckedDocuments(updatedCheckedDocs);
-         //   localStorage.setItem('checkedDocuments', JSON.stringify(updatedCheckedDocs));
-      //  }
-   // }, [hasScanned, validationResultsMap]);
+    const getCompletionCounts = () => {
+        const incomplete = data.filter(item => 
+            !isStudentComplete(item.studentId, studentBenefitsMap[item.studentId])
+        ).length;
+        
+        const complete = data.filter(item => 
+            isStudentComplete(item.studentId, studentBenefitsMap[item.studentId])
+        ).length;
+
+        return { incomplete, complete };
+    };
+
+    const { incomplete, complete } = getCompletionCounts();
+
+    useEffect(() => {
+        // Default to refreshing every 5 minutes (300000 milliseconds)
+        const REFRESH_INTERVAL = 5 * 60 * 1000;
+        let intervalId;
+
+        // Updated refresh function to match manual refresh behavior
+        const performAutoRefresh = async () => {
+            if (!loading) {
+                try {
+                    setLoading(true);
+                    setError(null);
+                    
+                    // Preserve existing validation results and checked documents
+                    const previousValidationResultsMap = { ...validationResultsMap };
+                    const previousCheckedDocuments = { ...checkedDocuments };
+                    
+                    // Perform the refresh operations
+                    await Promise.all([
+                        fetchExcelData(),
+                        loadFolderContents()
+                    ]);
+                    
+                    // Restore previous validation results and checked documents
+                    setValidationResultsMap(previousValidationResultsMap);
+                    setCheckedDocuments(previousCheckedDocuments);
+                    setHasScanned(hasScanned); // Preserve the previous scanned state
+
+                } catch (error) {
+                    setError('Failed to refresh data. Please try again.');
+                    console.error('Automatic refresh failed:', error);
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+
+        if (isAutoRefreshEnabled) {
+            // Set up new interval only when auto-refresh is enabled
+            intervalId = setInterval(performAutoRefresh, REFRESH_INTERVAL);
+        }
+
+        // Cleanup function to clear interval when component unmounts or auto-refresh is disabled
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [isAutoRefreshEnabled, loading, validationResultsMap, checkedDocuments, hasScanned]);
+
+    // Toggle auto-refresh
+    const toggleAutoRefresh = () => {
+        setIsAutoRefreshEnabled(prev => !prev);
+    };
+
+    useImperativeHandle(ref, () => ({
+        handleScan,
+        handleRefresh
+    }));
+
+    useEffect(() => {
+        // Update the parent component about loading state
+        setIsLoading(loading);
+    }, [loading, setIsLoading]);
 
     return (
         <div className="secure-page">
             <div className="content">
                 <img src="https://i.imgur.com/SROEj2Q.jpeg" alt="Company Logo" className="company-logo" />
-                <div className="header-controls">
-                    <div></div>
-                    <div>
-                        {hasScanned && (
-                            <Search searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                
+                {/* Only show controls and data after scanning */}
+                {hasScanned && (
+                    <>
+                        <div className="header-controls">
+                            <div className="view-toggle">
+                                <button 
+                                    className={`toggle-button ${!showCompleted ? 'active' : ''}`}
+                                    onClick={() => setShowCompleted(false)}
+                                >
+                                    Incomplete ({incomplete})
+                                </button>
+                                <button 
+                                    className={`toggle-button ${showCompleted ? 'active' : ''}`}
+                                    onClick={() => setShowCompleted(true)}
+                                >
+                                    Complete ({complete})
+                                </button>
+                                <button 
+                                    className="auto-refresh-button"
+                                    onClick={toggleAutoRefresh}
+                                >
+                                    {isAutoRefreshEnabled ? 'Disable Auto-Refresh' : 'Enable Auto-Refresh'}
+                                </button>
+                            </div>
+                            <div>
+                                <Search searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
+                            </div>
+                        </div>
+
+                        {missingFolders.length > 0 && (
+                            <div className="missing-folders-alert">
+                                <h3>{missingFolders.length} Student Folders Not Found</h3>
+                                <button 
+                                    onClick={handleCreateMissingFolders}
+                                    disabled={isCreatingFolders}
+                                >
+                                    {isCreatingFolders ? 'Creating Folders...' : 'Create Missing Folders'}
+                                </button>
+                                <div className="missing-folders-list">
+                                    {missingFolders.map((student, index) => (
+                                        <div key={index}>
+                                            {student.name} {student.studentId}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
-                    </div>
-                    <div className="scan-button-container">
-                        <button 
-                            className="scan-button"
-                            onClick={handleScan}
-                            disabled={!isDataLoaded}
-                        >
-                            {!hasScanned ? 'Scan Documents' : 'Rescan Documents'}
-                        </button>
-                    </div>
-                </div>
+                    </>
+                )}
                 
                 {error && <div className="error-message">{error}</div>}
-
-                {!hasScanned && isDataLoaded && (
-                    <div className="initial-message">
+                {loading && <div className="loading-message">Loading...</div>}
+                
+                {/* Show initial scan message if hasn't scanned yet */}
+                {!hasScanned && !loading && (
+                    <div className="initial-scan-message">
                         <h2>Welcome to the Document Tracker</h2>
-                        <p>Click "Scan Documents" to begin reviewing student documentation.</p>
+                        <p>Click the "Scan" button above to begin scanning documents.</p> 
                     </div>
                 )}
-    
-                {hasScanned && filteredData.length > 0 ? (
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th className="red-header">Name</th>
-                                <th className="red-header">Student ID</th>
-                                <th className="red-header">Benefit</th>
-                                <th className="red-header">Required Documents</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredData.map((veteran, index) => {
-                                const benefit = studentBenefitsMap[veteran.studentId] || '';
-                                const requiredDocs = requiredDocsMapping[benefit] || [];
-                                const isComplete = hasAllRequiredDocuments(veteran);
-    
-                                return (
-                                    <tr 
-                                        key={index}
-                                        className={isComplete ? 'completed-row' : ''}
-                                    >
-                                        <td>{veteran.name}</td>
-                                        <td>{veteran.studentId}</td>
-                                        <td>
-                                            {isEditing[veteran.studentId] ? (
-                                                <select
-                                                    value={editingBenefits[veteran.studentId] || benefit}
-                                                    onChange={(e) => {
-                                                        setEditingBenefits({
-                                                            ...editingBenefits,
-                                                            [veteran.studentId]: e.target.value
-                                                        });
-                                                    }}
-                                                    className="benefit-box"
-                                                >
-                                                    {Object.keys(requiredDocsMapping).map(ben => (
-                                                        <option key={ben} value={ben}>{ben}</option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <span>{benefit}</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <div className="document-container">
-                                                <div className="checkbox-column">
-                                                    {requiredDocs.map((doc, docIndex) => (
-                                                        <input
-                                                            key={docIndex}
-                                                            type="checkbox"
-                                                            checked={checkedDocuments[`${veteran.studentId}-${doc}`] || getDocumentStatus(veteran.studentId, doc)}
-                                                            onChange={() => handleCheckboxChange(`${veteran.studentId}-${doc}`, veteran.studentId)}
-                                                        />
-                                                    ))}
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!dateChecked[veteran.studentId]}
-                                                        onChange={() => handleDateToggle(veteran.studentId)}
-                                                    />
-                                                </div>
-                                                <div className="documents-column">
-                                                    {requiredDocs.map((doc, docIndex) => {
-                                                        const isValid = getDocumentStatus(veteran.studentId, doc);
-                                                        const isChecked = checkedDocuments[`${veteran.studentId}-${doc}`] || isValid;
+               
+                {/* Only show table after scanning and when there's data */}
+                {hasScanned && filteredData.length > 0 && (
+                    <DataTable 
+                        filteredData={filteredData}
+                        studentBenefitsMap={studentBenefitsMap}
+                        requiredDocsMapping={requiredDocsMapping}
+                        editingBenefits={editingBenefits}
+                        setEditingBenefits={setEditingBenefits}
+                        checkedDocuments={checkedDocuments}
+                        handleCheckboxChange={handleCheckboxChange}
+                        getDocumentStatus={getDocumentStatus}
+                        dateChecked={dateChecked}
+                        handleDateToggle={handleDateToggle}
+                    />
+                )}
                 
-                                                        return (
-                                                            <div key={docIndex} className={`document-box ${isChecked ? 'checked' : ''}`}>
-                                                                <span>{doc}</span>
-                                                                <div className="status-icons">
-                                                                    {isValid ? (
-                                                                        <Check className="status-icon valid" />
-                                                                    ) : (
-                                                                        <X className="status-icon invalid" />
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                    <div className="document-box">
-                                                        <span className="date-text">
-                                                            <span>Date</span>
-                                                            {dateChecked[veteran.studentId] && 
-                                                                new Date(dateChecked[veteran.studentId]).toLocaleDateString('en-US', {
-                                                                    month: 'numeric',
-                                                                    day: 'numeric'
-                                                                })
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                ) : hasScanned && (
-                    <div>
+                {/* Show no data message only after scanning */}
+                {hasScanned && filteredData.length === 0 && (
+                    <div className="no-data-message">
                         {searchTerm ? 'No matching results found' : 'No data available'}
                     </div>
                 )}
             </div>
         </div>
     );
-};
+});
 
 export default MergedDocumentTracker;

@@ -1,6 +1,4 @@
 import React from 'react';
-import './searchfunction.css';
-
 
 const Search = ({ searchTerm, setSearchTerm }) => {
     return (
@@ -13,8 +11,11 @@ const Search = ({ searchTerm, setSearchTerm }) => {
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
             <button 
-            className="clear-button"
-            onClick={() => setSearchTerm('')}>x</button>
+                className="clear-button"
+                onClick={() => setSearchTerm('')}
+            >
+                x
+            </button>
         </div>
     );
 };
