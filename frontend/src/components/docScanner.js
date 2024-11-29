@@ -2,8 +2,9 @@
 import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import * as XLSX from 'xlsx';
 import { 
-    fetchDigitalFilingCabinetId, fetchChildren, fetchFileCabinetId, fetchStudentRecordsId, 
-    fetchCurrentStudentsId,getExcelFileDownloadUrl, createStudentFoldersInBatches, fetchAllChildren
+    fetchDigitalFilingCabinetId, fetchChildren, fetchFileCabinetId, 
+    fetchStudentRecordsId, fetchCurrentStudentsId, getExcelFileDownloadUrl, 
+    createStudentFoldersInBatches, fetchAllChildren, updateExcelDateChecked 
 } from './graphService';
 import { driveId, studentTrackersFolderId } from './config';
 import Search from './search';
@@ -101,13 +102,34 @@ const MergedDocumentTracker = forwardRef(({ setIsLoading }, ref) => {
                     name: row[10],
                     studentId: row[13],
                     benefit: row[23],
+                    dateChecked: row[56] || null // Handle empty cells by setting to null
                 })).filter(item => item.name);
     
                 setData(excelData);
                 
                 const benefitsMap = {};
+                const newDateChecked = {};
                 excelData.forEach(student => {
                     benefitsMap[student.studentId] = cleanBenefit(student.benefit || '');
+
+                 // Only process the date if it exists and is valid
+            if (student.dateChecked) {
+                let date;
+                
+                // Handle different possible date formats
+                if (typeof student.dateChecked === 'number') {
+                    // Excel date number format
+                    date = new Date((student.dateChecked - 25569) * 86400 * 1000);
+                } else if (typeof student.dateChecked === 'string' && student.dateChecked.trim() !== '') {
+                    // String date format
+                    date = new Date(student.dateChecked);
+                }
+                
+                // Only store the date if it's valid
+                if (date && !isNaN(date.getTime())) {
+                    newDateChecked[student.studentId] = date.toISOString();
+                }
+            }    
                 });
                 setStudentBenefitsMap(benefitsMap);
                 
@@ -539,17 +561,46 @@ const MergedDocumentTracker = forwardRef(({ setIsLoading }, ref) => {
         });
     };
 
-    const handleDateToggle = (studentId) => {
-        setDateChecked(prev => {
-            const newDates = { ...prev };
-            if (newDates[studentId]) {
-                delete newDates[studentId];
+    const handleDateToggle = async (studentId) => {
+        try {
+            const newDates = { ...dateChecked };
+            const newDateValue = newDates[studentId] ? null : new Date().toISOString();
+
+            if (newDateValue) {
+                newDates[studentId] = newDateValue;
             } else {
-                newDates[studentId] = new Date().toISOString();
+                delete newDates[studentId];
             }
+
+            // Update Excel file first
+            await updateExcelDateChecked(
+                driveId,
+                studentTrackersFolderId,
+                studentId,
+                newDateValue
+            );
+
+            // If Excel update successful, update local state
+            setDateChecked(newDates);
             localStorage.setItem('dateChecked', JSON.stringify(newDates));
-            return newDates;
-        });
+
+            // Update the data state to reflect the new date
+            setData(prevData => 
+                prevData.map(student => {
+                    if (student.studentId === studentId) {
+                        return {
+                            ...student,
+                            dateChecked: newDateValue
+                        };
+                    }
+                    return student;
+                })
+            );
+
+        } catch (error) {
+            setError('Failed to update date in Excel file');
+            console.error('Error updating date:', error);
+        }
     };
 
     const getCompletionCounts = () => {

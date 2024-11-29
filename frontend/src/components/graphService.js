@@ -241,3 +241,52 @@ export const createStudentFoldersInBatches = async (driveId, parentFolderId, mis
     }
     return { results, errors };
 };
+
+export const updateExcelDateChecked = async (driveId, fileId, studentId, dateValue) => {
+    try {
+        const accessToken = await AuthService.getAccessToken();
+        // Find the row for the student first
+        const searchResponse = await fetch(
+            `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/usedRange/search(q='${studentId}')`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const searchData = await searchResponse.json();
+        if (!searchData.value || searchData.value.length === 0) {
+            throw new Error('Student ID not found in Excel file');
+        }
+
+        // Get the row number where the student ID was found
+        const rowIndex = searchData.value[0].rowIndex;
+
+        // Update the date checked cell (column BE)
+        const updateResponse = await fetch(
+            `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/range(address='BE${rowIndex + 1}')`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    values: [[dateValue ? new Date(dateValue).toLocaleDateString() : '']]
+                })
+            }
+        );
+
+        if (!updateResponse.ok) {
+            throw new Error('Failed to update Excel file');
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error updating Excel file:', error);
+        throw error;
+    }
+};
